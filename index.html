@@ -68,44 +68,51 @@ function login(){
  A.innerHTML='<div class="card"><h2>ඇතුල් වන්න</h2><label>Username</label><input id="u"><label>මුරපදය</label><input id="pw" type="password"><button id="go">ඇතුල් වන්න</button> <a href="#forgot">මුරපදය අමතකද?</a></div>';
  $('#go').onclick=async()=>{const u=D.u.find(x=>x.username==$('#u').value.trim().toLowerCase());if(!u||u.pw!=await hash(u.salt+$('#pw').value))return say('Username හෝ මුරපදය වැරදියි');me=u;localStorage.setItem('slfme',u.id);location.hash=''}
 }
-async function sendCode(u){
+const configured=()=>EJS.service&&EJS.template&&EJS.key;
+const mask=e=>e.replace(/^(.{2}).*(@.*)$/,'$1***$2');
+async function mailPin(to,name){
  const c=String(100000+(crypto.getRandomValues(new Uint32Array(1))[0]%900000));
- const r=await fetch('https://api.emailjs.com/api/v1.0/email/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({service_id:EJS.service,template_id:EJS.template,user_id:EJS.key,template_params:{to_email:u.email,username:u.username,code:c}})});
- if(!r.ok)throw Error('Email යැවීම අසාර්ථකයි');
- localStorage.setItem('slfreset',JSON.stringify({id:u.id,h:await hash(u.salt+c),exp:Date.now()+600000,n:0}));
+ const r=await fetch('https://api.emailjs.com/api/v1.0/email/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({service_id:EJS.service,template_id:EJS.template,user_id:EJS.key,template_params:{to_email:to,username:name,code:c}})});
+ if(!r.ok)throw Error('Email යැවීම අසාර්ථකයි. Email ලිපිනය පරීක්ෂා කරන්න');
+ return c;
 }
 function forgot(){
- const ok=EJS.service&&EJS.template&&EJS.key;
- A.innerHTML=`<div class="card"><h2>මුරපදය අමතකද?</h2><label>Username</label><input id="u"><div class="row"><button id="em" ${ok?'':'disabled'}>📧 Email කේතයක් යවන්න</button><button class="g" id="sq">ආරක්ෂක ප්‍රශ්නයෙන්</button></div>${ok?'':'<small>Email සේවාව තවම සකසා නැත.</small>'}<div id="st"></div></div>`;
- const find=()=>D.u.find(x=>x.username==$('#u').value.trim().toLowerCase());
- on('#em',async()=>{const u=find();if(!u)return say('Username හමු නොවීය');try{await sendCode(u)}catch(e){return say(e.message)}
-  $('#st').innerHTML=`<p>කේතයක් ${esc(u.email.replace(/^(.{2}).*(@.*)$/,'$1***$2'))} වෙත යැවුවා (විනාඩි 10ක් වලංගුයි).</p><label>කේතය</label><input id="cd" inputmode="numeric"><label>නව මුරපදය (අකුරු 8+)</label><input id="np" type="password"><button class="o" id="rs">මුරපදය වෙනස් කරන්න</button>`;
-  on('#rs',async()=>{const r=JSON.parse(localStorage.getItem('slfreset')||'null');if(!r||r.id!=u.id||Date.now()>r.exp)return say('කේතය කල් ඉකුත් වී ඇත');if($('#np').value.length<8)return say('මුරපදය අකුරු 8+');
-   if(++r.n>5){localStorage.removeItem('slfreset');return say('උත්සාහ ගණන ඉක්මවා ඇත')}localStorage.setItem('slfreset',JSON.stringify(r));
-   if(r.h!=await hash(u.salt+$('#cd').value.trim()))return say('කේතය වැරදියි');u.pw=await hash(u.salt+$('#np').value);save();localStorage.removeItem('slfreset');say('මුරපදය වෙනස් විය');location.hash='#login'})});
- on('#sq',()=>{const u=find();if(!u||!u.rq)return say('මෙම ගිණුමට ආරක්ෂක ප්‍රශ්නයක් නැත – Email කේතය භාවිතා කරන්න');
-  $('#st').innerHTML=`<p><b>${esc(RQ[u.rq-1])}</b></p><label>ඔබේ පිළිතුර</label><input id="an"><label>නව මුරපදය (අකුරු 8+)</label><input id="np" type="password"><button class="o" id="rs">මුරපදය වෙනස් කරන්න</button>`;
-  on('#rs',async()=>{if($('#np').value.length<8)return say('මුරපදය අකුරු 8+');if(u.ra!=await hash(u.salt+$('#an').value.trim().toLowerCase()))return say('පිළිතුර වැරදියි');u.pw=await hash(u.salt+$('#np').value);save();say('මුරපදය වෙනස් විය');location.hash='#login'})});
+ A.innerHTML=`<div class="card"><h2>මුරපදය අමතකද?</h2><label>Username</label><input id="u"><button class="o" id="em">📧 Email PIN කේතයක් යවන්න</button>${configured()?'':'<p><small>Email සේවාව තවම සකසා නැත – Admin ට දන්වන්න.</small></p>'}<div id="st"></div></div>`;
+ on('#em',async()=>{const u=D.u.find(x=>x.username==$('#u').value.trim().toLowerCase());if(!u)return say('Username හමු නොවීය');if(!configured())return say('Email සේවාව සකසා නැත');
+  let c;try{c=await mailPin(u.email,u.username)}catch(e){return say(e.message)}
+  const R={h:await hash(u.salt+c),exp:Date.now()+600000,n:0};
+  $('#st').innerHTML=`<p>PIN කේතයක් ${esc(mask(u.email))} වෙත යැවුවා (විනාඩි 10ක් වලංගුයි).</p><label>PIN කේතය</label><input id="cd" inputmode="numeric" maxlength="6"><label>නව මුරපදය (අකුරු 8+)</label><input id="np" type="password"><button class="o" id="rs">මුරපදය වෙනස් කර ඇතුල් වන්න</button>`;
+  on('#rs',async()=>{if(Date.now()>R.exp)return say('PIN කේතය කල් ඉකුත් වී ඇත. නැවත යවන්න');if($('#np').value.length<8)return say('මුරපදය අකුරු 8+');
+   if(++R.n>5){R.exp=0;return say('උත්සාහ ගණන ඉක්මවා ඇත. නැවත PIN එකක් ඉල්ලන්න')}
+   if(R.h!=await hash(u.salt+$('#cd').value.trim()))return say('PIN කේතය වැරදියි');
+   u.pw=await hash(u.salt+$('#np').value);save();me=u;localStorage.setItem('slfme',u.id);say('මුරපදය වෙනස් විය');location.hash='';route()})});
 }
 function reg(){
  A.innerHTML=`<div class="card"><h2>ගිණුමක් හදන්න</h2><label>ගිණුම් වර්ගය</label><select id="role"><option value="cust">පාරිභෝගික</option><option value="biz">ව්‍යාපාරික</option></select>
- <label class="req">Username (අනන්‍ය)</label><input id="un"><label class="req">Email</label><input id="em" type="email"><label class="req">මුරපදය (අකුරු 8+)</label><input id="pw" type="password">
+ <label class="req">Username (අනන්‍ය)</label><input id="un"><label class="req">Email (PIN කේතයක් එයට එවනු ලැබේ)</label><input id="em" type="email"><label class="req">මුරපදය (අකුරු 8+)</label><input id="pw" type="password">
  <label class="req">දුරකථන</label><input id="ph" type="tel">
  <div id="cn"><label class="req">ඔබේ නම</label><input id="nm"></div>
  <div id="bn" style="display:none"><label class="req">වෙළඳ (ව්‍යාපාර) නාමය</label><input id="bnm"></div>
  <label class="req">ස්ථානය</label><input id="loc"><button class="g" id="gps" type="button">📍 GPS</button>
  <div id="bz" style="display:none"><label>ව්‍යාපාරික ලිපිනය</label><input id="ad"><label>ලාංඡනය (Logo)</label><input id="lg" type="file" accept="image/*">${socIn()}</div>
- <label class="req">මුරපදය අමතක වුණොත් – ආරක්ෂක ප්‍රශ්නය</label><select id="rq">${RQ.map((q,i)=>`<option value="${i+1}">${q}</option>`).join('')}</select><input id="ra" placeholder="පිළිතුර">
  <button class="o" id="go">ගිණුම හදන්න</button></div>`;
  $('#role').onchange=e=>{const b=e.target.value=='biz';$('#bz').style.display=$('#bn').style.display=b?'block':'none';$('#cn').style.display=b?'none':'block'};
  on('#gps',gps);
  $('#go').onclick=async()=>{const un=$('#un').value.trim().toLowerCase(),role=$('#role').value,pw=$('#pw').value,b=role=='biz';
   if(!/^[a-z0-9_]{3,24}$/.test(un))return say('Username: a-z 0-9 _ (3-24)');
   if(D.u.some(x=>x.username==un))return say('මෙම Username එක දැනටමත් භාවිතා වේ');
-  const u={id:id(),role,username:un,email:$('#em').value.trim(),phone:$('#ph').value.trim(),name:(b?$('#bnm'):$('#nm')).value.trim(),location:$('#loc').value.trim(),ratings:{},saved:{},salt:id(),rq:+$('#rq').value};
-  if(!u.name||!u.email||!u.phone||!u.location||!$('#ra').value.trim()||pw.length<8)return say(b?'වෙළඳ නාමය ඇතුළු අනිවාර්ය තොරතුරු සම්පූර්ණ කරන්න':'අනිවාර්ය තොරතුරු සම්පූර්ණ කරන්න');
+  const u={id:id(),role,username:un,email:$('#em').value.trim(),phone:$('#ph').value.trim(),name:(b?$('#bnm'):$('#nm')).value.trim(),location:$('#loc').value.trim(),ratings:{},saved:{},salt:id()};
+  if(!u.name||!u.email||!u.phone||!u.location||pw.length<8)return say(b?'වෙළඳ නාමය ඇතුළු අනිවාර්ය තොරතුරු සම්පූර්ණ කරන්න':'අනිවාර්ය තොරතුරු සම්පූර්ණ කරන්න');
+  if(!/^\S+@\S+\.\S+$/.test(u.email))return say('වලංගු Email ලිපිනයක් ඇතුළත් කරන්න');
   if(b){u.address=$('#ad').value.trim();const f=$('#lg').files[0];u.logo=f?await imgUrl(f,160):'';u.links=getLinks()}
-  u.pw=await hash(u.salt+pw);u.ra=await hash(u.salt+$('#ra').value.trim().toLowerCase());D.u.push(u);save();me=u;localStorage.setItem('slfme',u.id);say('ගිණුම සාදා අවසන්');location.hash=''}
+  const done=async()=>{if(D.u.some(x=>x.username==un))return say('මෙම Username එක දැනටමත් භාවිතා වේ');u.pw=await hash(u.salt+pw);D.u.push(u);save();me=u;localStorage.setItem('slfme',u.id);say('ගිණුම සාදා අවසන්');location.hash=''};
+  if(!configured())return done();
+  let R;const send=async()=>{const c=await mailPin(u.email,u.username);R={h:await hash(u.salt+c),exp:Date.now()+600000,n:0}};
+  try{await send()}catch(e){return say(e.message)}
+  A.innerHTML=`<div class="card"><h2>Email තහවුරු කරන්න</h2><p>PIN කේතයක් ${esc(mask(u.email))} වෙත යැවුවා (විනාඩි 10ක් වලංගුයි).</p><label>PIN කේතය</label><input id="cd" inputmode="numeric" maxlength="6"><div class="row"><button class="o" id="vf">තහවුරු කර ගිණුම හදන්න</button><button class="g" id="rs">නැවත යවන්න</button></div></div>`;
+  on('#vf',async()=>{if(Date.now()>R.exp)return say('PIN කේතය කල් ඉකුත් වී ඇත. නැවත යවන්න');if(++R.n>5){R.exp=0;return say('උත්සාහ ගණන ඉක්මවා ඇත. නැවත යවන්න')}
+   if(R.h!=await hash(u.salt+$('#cd').value.trim()))return say('PIN කේතය වැරදියි');done()});
+  on('#rs',async()=>{try{await send();say('නව PIN කේතයක් යැවුවා')}catch(e){say(e.message)}})}
 }
 function bizPage(i){const b=D.u.find(u=>u.id==i);const pr=D.p.filter(p=>p.owner==i).sort(byRate);
  A.innerHTML=`<div class="card"><div class="row"><img class="logo" src="${b.logo||''}" alt=""><div><h2 style="margin:0">${esc(b.name)}</h2>${stars(b)}</div></div><p>📍 ${esc(b.location)} ${esc(b.address)}<br>📞 <a href="tel:${esc(b.phone)}">${esc(b.phone)}</a><br>✉️ <a href="mailto:${esc(b.email)}?subject=SL Fast Market">${esc(b.email)} – පණිවිඩයක් යවන්න</a></p><div class="soc">${soc(b.links)}</div>${me&&me.role=='cust'?'<p>ආයතනයට තරු දෙන්න:</p>'+rb():''}</div><div class="grid">${pr.map(card).join('')}</div>`;
