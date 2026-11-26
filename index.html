@@ -58,6 +58,8 @@ function home(){
  +`<h2>භාණ්ඩ</h2><div class="grid">${pr.map(card).join('')||'<p>භාණ්ඩ නැත.</p>'}</div>`;
 }
 function search(t){$('#q').value=t;const r=D.p.filter(p=>p.name.toLowerCase().includes(t.toLowerCase())).sort(byRate);A.innerHTML=`<h2>“${esc(t)}” (තරු වැඩි පළමුව)</h2><div class="grid">${r.map(card).join('')||'<p>හමු නොවීය.</p>'}</div>`}
+/* EmailJS (Email කේත යැවීමට) – emailjs.com හි ලැබෙන අගයන් මෙහි දමන්න */
+const EJS={service:'',template:'',key:''};
 const RQ=['ඔබේ පළමු පාසලේ නම?','ඔබේ ළඟම මිතුරාගේ නම?','ඔබේ උපන් නගරය?','ඔබේ ප්‍රියතම ආහාරය?'];
 const socIn=l=>Object.keys(SOC).map(k=>`<label>${k} (https://…)</label><input data-s="${k}" value="${esc((l||{})[k]||'')}">`).join('');
 const getLinks=()=>[...document.querySelectorAll('[data-s]')].filter(i=>okUrl(i.value.trim())).map(i=>({p:i.dataset.s,u:i.value.trim()}));
@@ -66,11 +68,24 @@ function login(){
  A.innerHTML='<div class="card"><h2>ඇතුල් වන්න</h2><label>Username</label><input id="u"><label>මුරපදය</label><input id="pw" type="password"><button id="go">ඇතුල් වන්න</button> <a href="#forgot">මුරපදය අමතකද?</a></div>';
  $('#go').onclick=async()=>{const u=D.u.find(x=>x.username==$('#u').value.trim().toLowerCase());if(!u||u.pw!=await hash(u.salt+$('#pw').value))return say('Username හෝ මුරපදය වැරදියි');me=u;localStorage.setItem('slfme',u.id);location.hash=''}
 }
+async function sendCode(u){
+ const c=String(100000+(crypto.getRandomValues(new Uint32Array(1))[0]%900000));
+ const r=await fetch('https://api.emailjs.com/api/v1.0/email/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({service_id:EJS.service,template_id:EJS.template,user_id:EJS.key,template_params:{to_email:u.email,username:u.username,code:c}})});
+ if(!r.ok)throw Error('Email යැවීම අසාර්ථකයි');
+ localStorage.setItem('slfreset',JSON.stringify({id:u.id,h:await hash(u.salt+c),exp:Date.now()+600000,n:0}));
+}
 function forgot(){
- A.innerHTML='<div class="card"><h2>මුරපදය අමතකද?</h2><label>Username</label><input id="u"><button id="nx">ඊළඟ</button><div id="st"></div></div>';
- $('#nx').onclick=()=>{const u=D.u.find(x=>x.username==$('#u').value.trim().toLowerCase());if(!u||!u.rq)return say('මෙම ගිණුමට recovery ප්‍රශ්නයක් නැත');
+ const ok=EJS.service&&EJS.template&&EJS.key;
+ A.innerHTML=`<div class="card"><h2>මුරපදය අමතකද?</h2><label>Username</label><input id="u"><div class="row"><button id="em" ${ok?'':'disabled'}>📧 Email කේතයක් යවන්න</button><button class="g" id="sq">ආරක්ෂක ප්‍රශ්නයෙන්</button></div>${ok?'':'<small>Email සේවාව තවම සකසා නැත.</small>'}<div id="st"></div></div>`;
+ const find=()=>D.u.find(x=>x.username==$('#u').value.trim().toLowerCase());
+ on('#em',async()=>{const u=find();if(!u)return say('Username හමු නොවීය');try{await sendCode(u)}catch(e){return say(e.message)}
+  $('#st').innerHTML=`<p>කේතයක් ${esc(u.email.replace(/^(.{2}).*(@.*)$/,'$1***$2'))} වෙත යැවුවා (විනාඩි 10ක් වලංගුයි).</p><label>කේතය</label><input id="cd" inputmode="numeric"><label>නව මුරපදය (අකුරු 8+)</label><input id="np" type="password"><button class="o" id="rs">මුරපදය වෙනස් කරන්න</button>`;
+  on('#rs',async()=>{const r=JSON.parse(localStorage.getItem('slfreset')||'null');if(!r||r.id!=u.id||Date.now()>r.exp)return say('කේතය කල් ඉකුත් වී ඇත');if($('#np').value.length<8)return say('මුරපදය අකුරු 8+');
+   if(++r.n>5){localStorage.removeItem('slfreset');return say('උත්සාහ ගණන ඉක්මවා ඇත')}localStorage.setItem('slfreset',JSON.stringify(r));
+   if(r.h!=await hash(u.salt+$('#cd').value.trim()))return say('කේතය වැරදියි');u.pw=await hash(u.salt+$('#np').value);save();localStorage.removeItem('slfreset');say('මුරපදය වෙනස් විය');location.hash='#login'})});
+ on('#sq',()=>{const u=find();if(!u||!u.rq)return say('මෙම ගිණුමට ආරක්ෂක ප්‍රශ්නයක් නැත – Email කේතය භාවිතා කරන්න');
   $('#st').innerHTML=`<p><b>${esc(RQ[u.rq-1])}</b></p><label>ඔබේ පිළිතුර</label><input id="an"><label>නව මුරපදය (අකුරු 8+)</label><input id="np" type="password"><button class="o" id="rs">මුරපදය වෙනස් කරන්න</button>`;
-  $('#rs').onclick=async()=>{if($('#np').value.length<8)return say('මුරපදය අකුරු 8+');if(u.ra!=await hash(u.salt+$('#an').value.trim().toLowerCase()))return say('පිළිතුර වැරදියි');u.pw=await hash(u.salt+$('#np').value);save();say('මුරපදය වෙනස් විය');location.hash='#login'}}
+  on('#rs',async()=>{if($('#np').value.length<8)return say('මුරපදය අකුරු 8+');if(u.ra!=await hash(u.salt+$('#an').value.trim().toLowerCase()))return say('පිළිතුර වැරදියි');u.pw=await hash(u.salt+$('#np').value);save();say('මුරපදය වෙනස් විය');location.hash='#login'})});
 }
 function reg(){
  A.innerHTML=`<div class="card"><h2>ගිණුමක් හදන්න</h2><label>ගිණුම් වර්ගය</label><select id="role"><option value="cust">පාරිභෝගික</option><option value="biz">ව්‍යාපාරික</option></select>
@@ -122,13 +137,17 @@ function profile(){if(!me)return location.hash='#login';const b=me.role=='biz',l
  A.innerHTML=`<div class="card"><h2>ප්‍රොෆයිල්</h2><label class="req">${b?'වෙළඳ නාමය':'නම'}</label><input id="nm" value="${esc(me.name)}"><label class="req">දුරකථන</label><input id="ph" value="${esc(me.phone)}"><label class="req">ස්ථානය</label><input id="loc" value="${esc(me.location)}"><button class="g" id="gps">📍 GPS</button>
  ${b?`<label>ලිපිනය</label><input id="ad" value="${esc(me.address)}"><label>නව ලාංඡනය</label><input id="lg" type="file" accept="image/*">${socIn(l)}`:''}<br><button class="o" id="go">සුරකින්න</button></div>
  ${b?'':`<div class="card"><h2>ව්‍යාපාරයක් ආරම්භ කරන්නද?</h2><p>ඔබටත් භාණ්ඩ විකිණීමට ව්‍යාපාරික ගිණුමක් බවට පත් කළ හැක.</p><label class="req">වෙළඳ නාමය</label><input id="bnm"><label>ලිපිනය</label><input id="ba"><label>ලාංඡනය</label><input id="bl" type="file" accept="image/*">${socIn()}<button class="o" id="up">ව්‍යාපාරික ගිණුමක් බවට පත් කරන්න</button></div>`}
- <div class="card"><h2>මුරපදය වෙනස් කරන්න</h2><label>දැනට ඇති මුරපදය</label><input id="op" type="password"><label>නව මුරපදය (අකුරු 8+)</label><input id="np" type="password"><button id="cp">මුරපදය වෙනස් කරන්න</button></div>`;
+ <div class="card"><h2>මුරපදය වෙනස් කරන්න</h2><label>දැනට ඇති මුරපදය</label><input id="op" type="password"><label>නව මුරපදය (අකුරු 8+)</label><input id="np" type="password"><button id="cp">මුරපදය වෙනස් කරන්න</button></div>
+ <div class="card"><h2>ගිණුම ඉවත් කරන්න</h2><p>ඔබේ ගිණුම සහ එයට අදාළ සියල්ල සම්පූර්ණයෙන් මැකේ. ආපසු හැරවිය නොහැක.</p><label>තහවුරු කිරීමට මුරපදය</label><input id="dp" type="password"><button class="r" id="da">ගිණුම සම්පූර්ණයෙන් ඉවත් කරන්න</button></div>`;
  on('#gps',gps);
  on('#go',async()=>{if(!$('#nm').value.trim()||!$('#ph').value.trim()||!$('#loc').value.trim())return say('අනිවාර්ය තොරතුරු අවශ්‍යයි');
   Object.assign(me,{name:$('#nm').value.trim(),phone:$('#ph').value.trim(),location:$('#loc').value.trim()});
   if(b){me.address=$('#ad').value.trim();me.links=getLinks();const f=$('#lg').files[0];if(f)me.logo=await imgUrl(f,160)}save();say('සුරැකිණි')});
  on('#up',async()=>{const n=$('#bnm').value.trim();if(!n)return say('වෙළඳ නාමය අනිවාර්යයි');
   me.role='biz';me.name=n;me.address=$('#ba').value.trim();me.links=getLinks();const f=$('#bl').files[0];me.logo=f?await imgUrl(f,160):'';save();say('ඔබේ ගිණුම ව්‍යාපාරික ගිණුමක් විය');route()});
+ on('#da',async()=>{if(me.pw!=await hash(me.salt+$('#dp').value))return say('මුරපදය වැරදියි');if(!confirm('ගිණුම සම්පූර්ණයෙන් ඉවත් කරන්නද? ආපසු හැරවිය නොහැක.'))return;
+  const id=me.id,mine=D.p.filter(p=>p.owner==id).map(p=>p.id);D.p=D.p.filter(p=>p.owner!=id);D.o=D.o.filter(o=>o.buyer!=id&&o.seller!=id&&!mine.includes(o.pid));D.p.forEach(p=>delete p.ratings[id]);D.u=D.u.filter(x=>x.id!=id);D.u.forEach(x=>{if(x.ratings)delete x.ratings[id]});
+  save();localStorage.removeItem('slfme');me=null;say('ගිණුම ඉවත් කළා');location.hash='';route()});
  on('#cp',async()=>{if(me.pw!=await hash(me.salt+$('#op').value))return say('දැනට ඇති මුරපදය වැරදියි');if($('#np').value.length<8)return say('නව මුරපදය අකුරු 8+');me.pw=await hash(me.salt+$('#np').value);save();say('මුරපදය වෙනස් විය');$('#op').value=$('#np').value=''})}
 route();
 </script></body></html>
