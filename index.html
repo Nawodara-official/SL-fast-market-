@@ -45,7 +45,7 @@ const imgUrl=(f,m)=>new Promise(r=>{const i=new Image();i.onload=()=>{const s=Ma
 const rb=()=>`<span class="rate">${[1,2,3,4,5].map(n=>`<button data-r="${n}">☆</button>`).join('')}</span>`;
 const bindR=f=>document.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>{if(!me)return say('තරු දීමට ඇතුල් වන්න');f(+b.dataset.r);save();say('තරු සටහන් විය');route()});
 const on=(s,f)=>{const e=$(s);if(e)e.onclick=f};
-const nav=()=>{$('#nav').innerHTML=me?`<a href="#">මුල් පිටුව</a>${me.role=='biz'?'<a href="#add">+ භාණ්ඩයක්</a><a href="#orders">ඇණවුම්</a><a href="#profile">ප්‍රොෆයිල්</a>':'<a href="#saved">සේව් කළ</a><a href="#orders">මගේ ඇණවුම්</a><a href="#profile">ප්‍රොෆයිල්</a>'}<a href="#" id="out">ඉවත් වන්න</a>`:'<a href="#login">ඇතුල් වන්න</a><a href="#reg">ගිණුමක් හදන්න</a>'};
+const nav=()=>{$('#nav').innerHTML=me?`${me.logo?`<a href="#profile"><img class="logo" src="${me.logo}" alt="" style="width:30px;height:30px;vertical-align:middle"></a>`:''}<a href="#">මුල් පිටුව</a>${me.role=='biz'?'<a href="#add">+ භාණ්ඩයක්</a><a href="#orders">ඇණවුම්</a><a href="#profile">ප්‍රොෆයිල්</a>':'<a href="#saved">සේව් කළ</a><a href="#orders">මගේ ඇණවුම්</a><a href="#profile">ප්‍රොෆයිල්</a>'}<a href="#" id="out">ඉවත් වන්න</a>`:'<a href="#login">ඇතුල් වන්න</a><a href="#reg">ගිණුමක් හදන්න</a>'};
 document.addEventListener('click',e=>{if(e.target.id=='out'){e.preventDefault();localStorage.removeItem('slfme');me=null;nav();location.hash='';route()}});
 addEventListener('hashchange',route);
 function route(){nav();const [p,a]=(location.hash.slice(1)||'home').split('/');const V={home,s:search,login,forgot,reg,biz:bizPage,b:bizPage,p:prod,add,orders,saved,profile};try{(V[p]||home)(decodeURIComponent(a||''))}catch(e){A.innerHTML='<div class="card">දෝෂයක්: '+esc(e.message)+'</div>'}}
@@ -94,7 +94,8 @@ function reg(){
  <div id="cn"><label class="req">ඔබේ නම</label><input id="nm"></div>
  <div id="bn" style="display:none"><label class="req">වෙළඳ (ව්‍යාපාර) නාමය</label><input id="bnm"></div>
  <label class="req">ස්ථානය</label><input id="loc"><button class="g" id="gps" type="button">📍 GPS</button>
- <div id="bz" style="display:none"><label>ව්‍යාපාරික ලිපිනය</label><input id="ad"><label>ලාංඡනය (Logo)</label><input id="lg" type="file" accept="image/*">${socIn()}</div>
+ <label>ප්‍රොෆයිල් ඡායාරූපය (ව්‍යාපාරිකයන්ට ලාංඡනය) – අවශ්‍ය නම් පමණක්</label><input id="lg" type="file" accept="image/*">
+ <div id="bz" style="display:none"><label>ව්‍යාපාරික ලිපිනය</label><input id="ad">${socIn()}</div>
  <button class="o" id="go">ගිණුම හදන්න</button></div>`;
  $('#role').onchange=e=>{const b=e.target.value=='biz';$('#bz').style.display=$('#bn').style.display=b?'block':'none';$('#cn').style.display=b?'none':'block'};
  on('#gps',gps);
@@ -104,7 +105,7 @@ function reg(){
   const u={id:id(),role,username:un,email:$('#em').value.trim(),phone:$('#ph').value.trim(),name:(b?$('#bnm'):$('#nm')).value.trim(),location:$('#loc').value.trim(),ratings:{},saved:{},salt:id()};
   if(!u.name||!u.email||!u.phone||!u.location||pw.length<8)return say(b?'වෙළඳ නාමය ඇතුළු අනිවාර්ය තොරතුරු සම්පූර්ණ කරන්න':'අනිවාර්ය තොරතුරු සම්පූර්ණ කරන්න');
   if(!/^\S+@\S+\.\S+$/.test(u.email))return say('වලංගු Email ලිපිනයක් ඇතුළත් කරන්න');
-  if(b){u.address=$('#ad').value.trim();const f=$('#lg').files[0];u.logo=f?await imgUrl(f,160):'';u.links=getLinks()}
+  const f=$('#lg').files[0];u.logo=f?await imgUrl(f,160):'';if(b){u.address=$('#ad').value.trim();u.links=getLinks()}
   const done=async()=>{if(D.u.some(x=>x.username==un))return say('මෙම Username එක දැනටමත් භාවිතා වේ');u.pw=await hash(u.salt+pw);D.u.push(u);save();me=u;localStorage.setItem('slfme',u.id);say('ගිණුම සාදා අවසන්');location.hash=''};
   if(!configured())return done();
   let R;const send=async()=>{const c=await mailPin(u.email,u.username);R={h:await hash(u.salt+c),exp:Date.now()+600000,n:0}};
@@ -141,15 +142,17 @@ function saved(){if(!me)return location.hash='#login';
  A.innerHTML='<h2>සේව් කළ භාණ්ඩ</h2>'+(Object.entries(me.saved).map(([i,was])=>{const p=D.p.find(x=>x.id==i);return p?`<div class="card row"><img class="logo" src="${p.img}" alt=""><div><a href="#p/${i}"><b>${esc(p.name)}</b></a><br><span class="price">රු. ${esc(p.price)}</span> ${String(was)!=String(p.price)?`<span class="tag">මිල වෙනස්: රු. ${esc(was)} → රු. ${esc(p.price)}</span>`:''}</div><button class="r" data-x="${i}">ඉවත්</button></div>`:`<div class="card">භාණ්ඩය ඉවත් කර ඇත <button class="r" data-x="${i}">මකන්න</button></div>`}).join('')||'<p>කිසිවක් නැත.</p>');
  document.querySelectorAll('[data-x]').forEach(b=>b.onclick=()=>{delete me.saved[b.dataset.x];save();route()})}
 function profile(){if(!me)return location.hash='#login';const b=me.role=='biz',l=Object.fromEntries((me.links||[]).map(x=>[x.p,x.u]));
- A.innerHTML=`<div class="card"><h2>ප්‍රොෆයිල්</h2><label class="req">${b?'වෙළඳ නාමය':'නම'}</label><input id="nm" value="${esc(me.name)}"><label class="req">දුරකථන</label><input id="ph" value="${esc(me.phone)}"><label class="req">ස්ථානය</label><input id="loc" value="${esc(me.location)}"><button class="g" id="gps">📍 GPS</button>
- ${b?`<label>ලිපිනය</label><input id="ad" value="${esc(me.address)}"><label>නව ලාංඡනය</label><input id="lg" type="file" accept="image/*">${socIn(l)}`:''}<br><button class="o" id="go">සුරකින්න</button></div>
+ A.innerHTML=`<div class="card"><h2>ප්‍රොෆයිල්</h2><div class="row"><img class="logo" id="pv" src="${me.logo||LOGO}" alt=""><div><label>ප්‍රොෆයිල් ඡායාරූපය${b?' (ලාංඡනය)':''}</label><input id="lg" type="file" accept="image/*"><button class="g" id="rm" type="button">ඡායාරූපය ඉවත් කරන්න</button></div></div><label class="req">${b?'වෙළඳ නාමය':'නම'}</label><input id="nm" value="${esc(me.name)}"><label class="req">දුරකථන</label><input id="ph" value="${esc(me.phone)}"><label class="req">ස්ථානය</label><input id="loc" value="${esc(me.location)}"><button class="g" id="gps">📍 GPS</button>
+ ${b?`<label>ලිපිනය</label><input id="ad" value="${esc(me.address)}">${socIn(l)}`:''}<br><button class="o" id="go">සුරකින්න</button></div>
  ${b?'':`<div class="card"><h2>ව්‍යාපාරයක් ආරම්භ කරන්නද?</h2><p>ඔබටත් භාණ්ඩ විකිණීමට ව්‍යාපාරික ගිණුමක් බවට පත් කළ හැක.</p><label class="req">වෙළඳ නාමය</label><input id="bnm"><label>ලිපිනය</label><input id="ba"><label>ලාංඡනය</label><input id="bl" type="file" accept="image/*">${socIn()}<button class="o" id="up">ව්‍යාපාරික ගිණුමක් බවට පත් කරන්න</button></div>`}
  <div class="card"><h2>මුරපදය වෙනස් කරන්න</h2><label>දැනට ඇති මුරපදය</label><input id="op" type="password"><label>නව මුරපදය (අකුරු 8+)</label><input id="np" type="password"><button id="cp">මුරපදය වෙනස් කරන්න</button></div>
  <div class="card"><h2>ගිණුම ඉවත් කරන්න</h2><p>ඔබේ ගිණුම සහ එයට අදාළ සියල්ල සම්පූර්ණයෙන් මැකේ. ආපසු හැරවිය නොහැක.</p><label>තහවුරු කිරීමට මුරපදය</label><input id="dp" type="password"><button class="r" id="da">ගිණුම සම්පූර්ණයෙන් ඉවත් කරන්න</button></div>`;
  on('#gps',gps);
  on('#go',async()=>{if(!$('#nm').value.trim()||!$('#ph').value.trim()||!$('#loc').value.trim())return say('අනිවාර්ය තොරතුරු අවශ්‍යයි');
   Object.assign(me,{name:$('#nm').value.trim(),phone:$('#ph').value.trim(),location:$('#loc').value.trim()});
-  if(b){me.address=$('#ad').value.trim();me.links=getLinks();const f=$('#lg').files[0];if(f)me.logo=await imgUrl(f,160)}save();say('සුරැකිණි')});
+  const f=$('#lg').files[0];if(f)me.logo=await imgUrl(f,160);if(b){me.address=$('#ad').value.trim();me.links=getLinks()}save();say('සුරැකිණි');route()});
+ on('#rm',()=>{me.logo='';save();say('ඡායාරූපය ඉවත් කළා');route()});
+ $('#lg').onchange=async e=>{const f=e.target.files[0];if(f)$('#pv').src=await imgUrl(f,160)};
  on('#up',async()=>{const n=$('#bnm').value.trim();if(!n)return say('වෙළඳ නාමය අනිවාර්යයි');
   me.role='biz';me.name=n;me.address=$('#ba').value.trim();me.links=getLinks();const f=$('#bl').files[0];me.logo=f?await imgUrl(f,160):'';save();say('ඔබේ ගිණුම ව්‍යාපාරික ගිණුමක් විය');route()});
  on('#da',async()=>{if(me.pw!=await hash(me.salt+$('#dp').value))return say('මුරපදය වැරදියි');if(!confirm('ගිණුම සම්පූර්ණයෙන් ඉවත් කරන්නද? ආපසු හැරවිය නොහැක.'))return;
